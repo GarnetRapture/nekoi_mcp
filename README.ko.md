@@ -1,4 +1,21 @@
+<div align="center">
+
+<img src="garnet2.png" alt="Nekoi_MCP" width="300">
+
 # Nekoi_MCP
+
+**Claude Code를 그 자신의 기록으로 판정하고, 사후가 아니라 의도 단계에서 시도를 멈춥니다.**
+
+[![Go](https://img.shields.io/badge/Go-1.26-8B1A2B?style=flat-square&labelColor=1A1A1A)](https://go.dev)
+[![MCP](https://img.shields.io/badge/MCP-2026--07--28-8B1A2B?style=flat-square&labelColor=1A1A1A)](https://modelcontextprotocol.io)
+[![Platforms](https://img.shields.io/badge/windows%20·%20linux%20·%20macos-D4AF37?style=flat-square&labelColor=1A1A1A)](#설치)
+[![License](https://img.shields.io/badge/License-MIT-D4AF37?style=flat-square&labelColor=1A1A1A)](LICENSE)
+
+[English](README.md) · **한국어**
+
+</div>
+
+---
 
 Claude Code가 도구를 부르기 직전에 그 호출의 사고 원문을 읽고, 규칙에 어긋나면 호출을 막습니다.
 
@@ -106,4 +123,10 @@ internal/selfreg/    훅 자동 등록
 
 MIT. [LICENSE](LICENSE) 참조.
 
-제작자: Nekoi · garnet@everlib.pro · https://github.com/GarnetRapture
+<div align="center">
+
+**Nekoi**
+
+[garnet@everlib.pro](mailto:garnet@everlib.pro) · [github.com/GarnetRapture](https://github.com/GarnetRapture)
+
+</div>

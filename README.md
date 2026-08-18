@@ -1,4 +1,21 @@
+<div align="center">
+
+<img src="garnet2.png" alt="Nekoi_MCP" width="300">
+
 # Nekoi_MCP
+
+**Judges Claude Code by its own transcript, and stops the attempt at the point of intent — not after the fact.**
+
+[![Go](https://img.shields.io/badge/Go-1.26-8B1A2B?style=flat-square&labelColor=1A1A1A)](https://go.dev)
+[![MCP](https://img.shields.io/badge/MCP-2026--07--28-8B1A2B?style=flat-square&labelColor=1A1A1A)](https://modelcontextprotocol.io)
+[![Platforms](https://img.shields.io/badge/windows%20·%20linux%20·%20macos-D4AF37?style=flat-square&labelColor=1A1A1A)](#install)
+[![License](https://img.shields.io/badge/License-MIT-D4AF37?style=flat-square&labelColor=1A1A1A)](LICENSE)
+
+**English** · [한국어](README.ko.md)
+
+</div>
+
+---
 
 A guard for Claude Code that reads what the model actually wrote before a tool
 call and blocks the call when the reasoning behind it breaks a rule.
@@ -150,4 +167,10 @@ internal/selfreg/    self-registration as a hook
 
 MIT. See [LICENSE](LICENSE).
 
-Author: Nekoi · garnet@everlib.pro · https://github.com/GarnetRapture
+<div align="center">
+
+**Nekoi**
+
+[garnet@everlib.pro](mailto:garnet@everlib.pro) · [github.com/GarnetRapture](https://github.com/GarnetRapture)
+
+</div>

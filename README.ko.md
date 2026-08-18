@@ -66,22 +66,11 @@ MCP 서버로 등록하려면 이렇게 합니다.
 claude mcp add --scope user nekoi_mcp -- /path/to/nekoi_mcp mcp
 ```
 
-훅으로 등록하려면 `~/.claude/settings.json`에 다음을 넣습니다.
+이 한 줄이 설치의 전부입니다. 훅은 따로 넣지 않아도 됩니다. 서버가 처음 뜰 때 `~/.claude/settings.json`을 열어 `PreToolUse`, `Stop`, `MessageDisplay` 가운데 자기 실행 경로가 없는 것에만 자기를 넣습니다. 이미 들어 있으면 파일을 건드리지 않고, 나머지 설정과 다른 훅 항목은 원문 그대로 둡니다. 쓸 때는 임시 파일에 먼저 적고 이름을 바꾸므로, 도중에 실패해도 원래 설정이 남습니다.
 
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "/path/to/nekoi_mcp" }] }
-    ],
-    "Stop": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "/path/to/nekoi_mcp" }] }
-    ]
-  }
-}
-```
+같은 실행 파일이 두 가지로 동작합니다. 아무 인자 없이 실행하면 훅으로 돌면서 표준 입력으로 들어온 내용을 읽고, 뒤에 `mcp`를 붙이면 표준 입출력으로 JSON-RPC를 주고받습니다. 위 등록은 `mcp`를 붙이므로 서버 쪽이고, 훅 쪽은 인자 없이 불립니다.
 
-둘 다 같은 실행 파일을 씁니다. 아무 인자 없이 실행하면 훅으로 동작하면서 표준 입력으로 들어온 내용을 읽고, 뒤에 `mcp`를 붙이면 표준 입출력으로 JSON-RPC를 주고받습니다.
+`MessageDisplay`는 답변이 화면에 흐르는 동안 돌아갑니다. 사고 블록은 화면에 그려지기 전에 이미 JSONL에 적히므로, 이 시점이면 방금 쓴 사고를 그 자리에서 읽을 수 있습니다. 여기서 위반이 잡히면 그 답변을 중간에 끊습니다. `PreToolUse`와 `Stop`만 걸려 있으면 도구를 부르지 않고 사고만 이어가는 구간이 통째로 비어 버립니다.
 
 ## MCP 도구
 
@@ -109,6 +98,8 @@ internal/transcript/ JSONL 파싱, 사용량 집계
 internal/session/    세션별 상태
 internal/sig/        도구 호출·환경 조회 식별자
 internal/rules/      규칙, 주입 예산, 내장 패턴
+internal/watch/      세션 기록 실시간 추적
+internal/selfreg/    훅 자동 등록
 ```
 
 ## 라이선스

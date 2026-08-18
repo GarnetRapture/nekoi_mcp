@@ -53,6 +53,14 @@ type Block struct {
 	Name     string          `json:"name"`
 	Input    json.RawMessage `json:"input"`
 	Content  json.RawMessage `json:"content"`
+
+	// ID identifies a tool_use block; ToolUseID is the reference back to it
+	// carried by the tool_result that answers it, and IsError marks that
+	// answer as a failure. A call a hook denied never executed, so its result
+	// is an error and its arguments produced no observation.
+	ID        string `json:"id"`
+	ToolUseID string `json:"tool_use_id"`
+	IsError   bool   `json:"is_error"`
 }
 
 // Thought is one assistant thinking block with the model that produced it.
@@ -121,6 +129,24 @@ func (e Entry) isUserPrompt() bool {
 	return false
 }
 
+// failedCalls returns the ids of the tool_use blocks whose result came back an
+// error. A result always follows the call that produced it, so the whole range
+// is read before any call is tallied.
+func failedCalls(ring []Entry) map[string]bool {
+	failed := make(map[string]bool)
+	for _, e := range ring {
+		if e.Type != "user" {
+			continue
+		}
+		for _, b := range e.Message.blocks() {
+			if b.Type == "tool_result" && b.IsError && b.ToolUseID != "" {
+				failed[b.ToolUseID] = true
+			}
+		}
+	}
+	return failed
+}
+
 func (e Entry) userText() string {
 	var parts []string
 	for _, b := range e.Message.blocks() {
@@ -172,6 +198,12 @@ func Load(path string, maxLines int) (*Turn, error) {
 		}
 	}
 
+	// A call that was refused still leaves its tool_use block behind, answered
+	// by an error result. It never ran, so it observed nothing and consumed
+	// nothing; counting it would let one refusal mark the arguments as already
+	// tried and turn every reissue into a duplicate.
+	failed := failedCalls(ring)
+
 	var txt, evidence []string
 	if t.UserPrompt != "" {
 		evidence = append(evidence, t.UserPrompt)
@@ -210,6 +242,9 @@ func Load(path string, maxLines int) (*Turn, error) {
 					txt = append(txt, b.Text)
 				}
 			case "tool_use":
+				if failed[b.ID] {
+					continue
+				}
 				if k := sig.Probe(b.Name, b.Input); k != "" {
 					t.ProbeKeys = append(t.ProbeKeys, k) // session-wide
 				}

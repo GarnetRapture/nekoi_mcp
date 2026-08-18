@@ -70,8 +70,14 @@ func Merge(msgs []string, spentChars int64) string {
 	return cut(strings.Join(parts, "\n"), total)
 }
 
-// Terse collapses a repeated notice to a single line once the full text has
-// already been delivered enough times to be present in context.
-func Terse(class string, occurrence int) string {
-	return fmt.Sprintf("[%s #%d] Same violation as before; the full notice is already in this context. Act on it.", class, occurrence)
+// Terse drops the explanation of a repeated notice but never the instruction.
+// Collapsing to "it is already in context, act on it" assumes the earlier text
+// is still steering; a violation repeating for the Nth time is the evidence
+// that it is not, so the one line that says what to do has to survive.
+func Terse(class string, occurrence int, action string) string {
+	head := fmt.Sprintf("[%s #%d] Same violation as before.", class, occurrence)
+	if action = strings.TrimSpace(action); action == "" {
+		return head
+	}
+	return head + "\n" + action
 }

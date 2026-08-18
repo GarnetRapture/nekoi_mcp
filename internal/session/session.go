@@ -16,15 +16,31 @@ type State struct {
 	CWD         string    `json:"cwd"`
 	StartedAt   time.Time `json:"started_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-	ENCount     int       `json:"en_count"`     // English thinking blocks flagged
-	JACount     int       `json:"ja_count"`     // Japanese thinking blocks flagged
-	DenyCount   int       `json:"deny_count"`   // tool calls actually denied
-	ToolCalls   int       `json:"tool_calls"`   // tool calls seen
-	Cursor      int       `json:"cursor"`       // thinking blocks already judged
-	Streak      int       `json:"streak"`       // consecutive EN verdicts
+	ENCount     int       `json:"en_count"`   // English thinking blocks flagged
+	JACount     int       `json:"ja_count"`   // Japanese thinking blocks flagged
+	DenyCount   int       `json:"deny_count"` // tool calls actually denied
+	ToolCalls   int       `json:"tool_calls"` // tool calls seen
+	Cursor      int       `json:"cursor"`     // thinking blocks already judged
+	Streak      int       `json:"streak"`     // consecutive EN verdicts
 	LastVerdict string    `json:"last_verdict"`
 	RepeatSig   string    `json:"repeat_sig"`   // signature of the previous call
 	RepeatCount int       `json:"repeat_count"` // identical consecutive calls
+
+	// The watcher tails the transcript continuously and sees blocks the hook
+	// never reaches, because the hook only runs before a tool call and at turn
+	// end. Its tally is kept apart from ENCount/JACount so the two never add
+	// the same block twice; WatchSeen is how far it has read.
+	WatchEN   int `json:"watch_en"`
+	WatchJA   int `json:"watch_ja"`
+	WatchSeen int `json:"watch_seen"`
+
+	// WatchBlock is raised the moment the watcher reads a violating block and
+	// is cleared by the first hook that acts on it. It carries the verdict and
+	// the offending sentence so the denial quotes what was actually written
+	// rather than asserting a violation the model cannot see.
+	WatchBlock   bool   `json:"watch_block"`
+	WatchVerdict string `json:"watch_verdict"`
+	WatchQuote   string `json:"watch_quote"`
 
 	// Billed API traffic, read from the usage accounting Claude Code stores
 	// for each assistant message. ContextTokens is the prompt size the last

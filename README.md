@@ -97,23 +97,24 @@ As an MCP server:
 claude mcp add --scope user nekoi_mcp -- /path/to/nekoi_mcp mcp
 ```
 
-As a hook, in `~/.claude/settings.json`:
+That line is the whole installation; the hooks need no separate entry. On its
+first startup the server opens `~/.claude/settings.json` and adds itself to
+`PreToolUse`, `Stop` and `MessageDisplay` — only to the ones whose entries do
+not already run this path. When they all do, the file is left alone, and every
+other setting and hook entry is carried across verbatim either way. The write
+goes to a temporary file that is then renamed, so a failure partway leaves the
+original settings in place.
 
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "/path/to/nekoi_mcp" }] }
-    ],
-    "Stop": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "/path/to/nekoi_mcp" }] }
-    ]
-  }
-}
-```
+One binary, two modes. With no argument it acts as a hook, reading the payload
+on stdin; with `mcp` it speaks JSON-RPC over stdio. The registration above
+passes `mcp`, so it is the server; the hook side is invoked with no argument.
 
-Both registrations use the same binary. With no argument it acts as a hook,
-reading the payload on stdin; with `mcp` it speaks JSON-RPC over stdio.
+`MessageDisplay` runs while the answer is still streaming. A thinking block is
+written to the JSONL before it is rendered, so by then the reasoning just
+produced can be read where it lies, and a violation caught there cuts the
+answer off mid-sentence. With only `PreToolUse` and `Stop` in place, the
+stretch where reasoning continues without any tool call goes entirely
+unwatched.
 
 ## MCP tools
 
@@ -141,6 +142,8 @@ internal/transcript/ JSONL parsing, usage accounting
 internal/session/    per-session state
 internal/sig/        canonical tool-call and probe identity
 internal/rules/      the rules, notice budget, embedded patterns
+internal/watch/      live transcript tailing
+internal/selfreg/    self-registration as a hook
 ```
 
 ## License

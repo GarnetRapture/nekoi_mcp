@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	"nekoi_mcp/internal/lang"
 	"nekoi_mcp/internal/rules"
+	"nekoi_mcp/internal/selfreg"
 	"nekoi_mcp/internal/session"
+	"nekoi_mcp/internal/watch"
 )
 
 const protocolVersion = "2026-07-28"
@@ -84,12 +88,70 @@ func toolCatalog() []toolDef {
 	}
 }
 
+// clientNotifier writes to the same stdio connection the response loop uses.
+// The watcher runs on its own goroutine, so every write goes through one mutex
+// — two writers interleaving on stdout would produce JSON neither side can
+// parse.
+type clientNotifier struct {
+	mu  sync.Mutex
+	out *bufio.Writer
+}
+
+// send writes one already-marshalled message. Both the response loop and the
+// watcher go through here, so the two never interleave on stdout.
+func (n *clientNotifier) send(b []byte) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.out.Write(b)
+	n.out.WriteByte('\n')
+	n.out.Flush()
+}
+
+// Notify pushes the verdict out the moment the watcher reads it. A server may
+// send a notification whenever it likes, which is what makes this independent
+// of any hook: no tool call has to happen first.
+func (n *clientNotifier) Notify(verdict, excerpt string) {
+	msg := map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "notifications/message",
+		"params": map[string]any{
+			"level":  "error",
+			"logger": AppName,
+			"data": fmt.Sprintf(
+				"[WATCH_%s] The transcript watcher read this thinking block as it was written:\n> %s\nThat is the thinking channel, not the reply — writing the reply in Korean leaves it standing.",
+				verdict, excerpt),
+		},
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	n.send(b)
+}
+
 func runMCP() int {
+	// One `claude mcp add` has to be the whole installation, so the server
+	// puts its own hook registration in place here. A failure is not fatal:
+	// the MCP tools still work, and the next startup tries again.
+	if exe, err := os.Executable(); err == nil {
+		_, _ = selfreg.Ensure(settingsPath(), filepath.ToSlash(exe))
+	}
+
 	store := session.NewStore(stateDir())
+
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 1<<20), 32<<20)
 	out := bufio.NewWriter(os.Stdout)
 	defer out.Flush()
+
+	// This process outlives every hook invocation, so it is the only place a
+	// continuous watch can run: the hook fires before a tool call and at turn
+	// end, and reasoning produced between those points reaches neither. The
+	// notifier hands it the same connection this loop replies on.
+	notifier := &clientNotifier{out: out}
+	w := watch.New(projectsDir(), store, notifier)
+	w.Start()
+	defer w.Stop()
 
 	for in.Scan() {
 		line := strings.TrimSpace(in.Text())
@@ -100,7 +162,7 @@ func runMCP() int {
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
 			continue
 		}
-		resp := dispatch(store, req)
+		resp := dispatch(store, w, req)
 		if resp == nil { // notification: no reply
 			continue
 		}
@@ -108,14 +170,12 @@ func runMCP() int {
 		if err != nil {
 			continue
 		}
-		out.Write(b)
-		out.WriteByte('\n')
-		out.Flush()
+		notifier.send(b)
 	}
 	return 0
 }
 
-func dispatch(store *session.Store, req rpcRequest) *rpcResponse {
+func dispatch(store *session.Store, w *watch.Watcher, req rpcRequest) *rpcResponse {
 	if len(req.ID) == 0 {
 		return nil // notification
 	}
@@ -133,7 +193,13 @@ func dispatch(store *session.Store, req rpcRequest) *rpcResponse {
 		}
 		resp.Result = map[string]any{
 			"protocolVersion": init.ProtocolVersion,
-			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
+			// logging is what lets the watcher's verdict reach the client
+			// without a tool call: notifications/message is only honoured
+			// when the server declares it here.
+			"capabilities": map[string]any{
+				"tools":   map[string]any{"listChanged": false},
+				"logging": map[string]any{},
+			},
 			"serverInfo": map[string]any{
 				"name":    AppName,
 				"version": AppVersion,
@@ -144,7 +210,7 @@ func dispatch(store *session.Store, req rpcRequest) *rpcResponse {
 	case "tools/list":
 		resp.Result = map[string]any{"resultType": "complete", "tools": toolCatalog()}
 	case "tools/call":
-		resp.Result = callTool(store, req.Params)
+		resp.Result = callTool(store, w, req.Params)
 	case "ping":
 		resp.Result = map[string]any{}
 	default:
@@ -153,7 +219,7 @@ func dispatch(store *session.Store, req rpcRequest) *rpcResponse {
 	return resp
 }
 
-func callTool(store *session.Store, params json.RawMessage) callResult {
+func callTool(store *session.Store, w *watch.Watcher, params json.RawMessage) callResult {
 	var p struct {
 		Name      string `json:"name"`
 		Arguments struct {
@@ -163,6 +229,17 @@ func callTool(store *session.Store, params json.RawMessage) callResult {
 		} `json:"arguments"`
 	}
 	_ = json.Unmarshal(params, &p)
+
+	// Enforced here, not deferred to a hook: the watcher read this block from
+	// the transcript while the reasoning was still running, and this process is
+	// the one being asked to act on it.
+	if w != nil {
+		if v := w.TakePending(); v != nil {
+			return textResult(fmt.Sprintf(
+				"[WATCH_%s] The watcher read this block as it was written, before any hook ran.\n> %s\nThis call is refused on that block alone. Discard it, think the same problem through again in Korean at the same depth, then call.",
+				v.Verdict, v.Excerpt), true)
+		}
+	}
 
 	switch p.Name {
 	case "censor_session_status":
@@ -194,9 +271,10 @@ func statusReport(store *session.Store, id string) string {
 	if st == nil || st.SessionID == "" {
 		return "no supervised session on record"
 	}
-	return fmt.Sprintf("session=%s model=%s\nEN=%d JA=%d denied=%d/%d calls=%d streak=%d last=%s\ncontext=%d out=%d notices=%d injected=%d chars\ncwd=%s",
+	return fmt.Sprintf("session=%s model=%s\nEN=%d JA=%d denied=%d/%d calls=%d streak=%d last=%s\nwatch: EN=%d JA=%d seen=%d\ncontext=%d out=%d notices=%d injected=%d chars\ncwd=%s",
 		st.SessionID, st.Model, st.ENCount, st.JACount, st.DenyCount,
 		rules.DenyLimit, st.ToolCalls, st.Streak, st.LastVerdict,
+		st.WatchEN, st.WatchJA, st.WatchSeen,
 		st.ContextTokens, st.OutputTokens, st.Notices, st.InjectedChars, st.CWD)
 }
 

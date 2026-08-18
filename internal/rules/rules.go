@@ -78,21 +78,53 @@ func EvaluateThinking(st *session.State, turn *transcript.Turn) *Result {
 	}
 }
 
+// EvaluateWatchBlock acts on what the watcher found between hook invocations.
+// The hook runs before a tool call and at turn end; reasoning written in
+// between reaches neither, and by the time this runs the watcher has already
+// settled the verdict. The flag is cleared as it is consumed, because a flag
+// left standing would deny every later call and wedge the session.
+func EvaluateWatchBlock(st *session.State) *Result {
+	if !st.WatchBlock {
+		return nil
+	}
+	verdict, quote := st.WatchVerdict, st.WatchQuote
+	st.WatchBlock = false
+	st.WatchVerdict = ""
+	st.WatchQuote = ""
+
+	count := st.WatchEN
+	if verdict == string(lang.VerdictJapanse) {
+		count = st.WatchJA
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "[WATCH_%s #%d] The transcript watcher read this while you were reasoning, before any hook could run.\n", verdict, count)
+	if quote != "" {
+		fmt.Fprintf(&b, "> %s\n", truncate(quote, quoteChars))
+	}
+	b.WriteString("This call is denied on that block alone. Discard it, think the same problem through again in Korean at the same depth, then call.")
+	// Unconditional: this is the one verdict the watcher already settled from
+	// the written transcript, so no tally may soften it into a mere notice.
+	return &Result{Deny: true, Message: b.String()}
+}
+
 func buildMessage(st *session.State, v lang.Verdict, th transcript.Thought) string {
-	count := st.ENCount
+	// The watcher reads the transcript continuously and catches blocks written
+	// between hook invocations, which this count would otherwise omit.
+	count := st.ENCount + st.WatchEN
 	label := "EN"
 	if v == lang.VerdictJapanse {
-		count, label = st.JACount, "JA"
+		count, label = st.JACount+st.WatchJA, "JA"
 	}
 	class := "THINKING_NOT_KOREAN/" + label
 	if count > RepeatSuppressAfter {
-		// The full text was already delivered; quote the offending line and
-		// stop re-sending the explanation that is still in context.
+		// The explanation is dropped, the instruction is not: a violation on
+		// its Nth repeat is proof that the earlier text stopped steering.
 		quote := ""
 		if spans := lang.EnglishSpans(th.Text, 1); len(spans) > 0 {
 			quote = "\n> " + truncate(spans[0], quoteChars)
 		}
-		return Terse(class, count) + quote
+		return Terse(class, count, "Your thinking block, not your reply — a Korean reply does not settle it. Discard that block and think the same problem through again in Korean, at the same depth, before this call.") + quote
 	}
 
 	var b strings.Builder
@@ -105,12 +137,30 @@ func buildMessage(st *session.State, v lang.Verdict, th transcript.Thought) stri
 	for _, q := range quotes {
 		fmt.Fprintf(&b, "> %s\n", truncate(q, quoteChars))
 	}
-	b.WriteString("You wrote that. Reply language is a separate channel and does not cover it.\n")
+	b.WriteString("That is your thinking block, not your reply. Writing the reply in Korean does not make the thinking compliant — they are two channels and this notice is about the thinking one.\n")
 	b.WriteString("Discard it, think the same problem through again in Korean at the same depth, then call. Translating or summarizing it is not re-reasoning.")
 	if st.Streak >= 2 {
 		fmt.Fprintf(&b, "\n[REPEAT x%d] Every prior notice was followed by another English block.", st.Streak)
 	}
 	return b.String()
+}
+
+// EvaluateUnresolved catches the gap the cursor leaves open: once a block has
+// been charged the cursor moves past it, so calling again without reasoning at
+// all produces no fresh block for EvaluateThinking to judge, and the notice
+// passes unanswered. Acknowledging a violation and proceeding anyway is the
+// same as never reading it.
+func EvaluateUnresolved(st *session.State, fresh string) *Result {
+	last := st.LastVerdict
+	if last != string(lang.VerdictEnglish) && last != string(lang.VerdictJapanse) {
+		return nil
+	}
+	if strings.TrimSpace(fresh) != "" {
+		return nil
+	}
+	return &Result{Deny: true, Message: fmt.Sprintf(
+		"[UNRESOLVED_%s] The last thinking block was flagged and you are calling again without having reasoned since.\nThe notice is answered by reasoning through it again in Korean, not by proceeding. Do that first, then call.",
+		last)}
 }
 
 // EvaluateRepeat catches the loop where the same call is reissued instead of

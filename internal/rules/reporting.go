@@ -12,7 +12,10 @@ var (
 	// A path-looking token with a source extension, optionally followed by
 	// line numbers. Citing one reads as first-hand observation.
 	reFileRef = regexp.MustCompile(
-		`[A-Za-z0-9_@][A-Za-z0-9_@./+-]*\.(?:ts|tsx|js|jsx|mjs|cjs|json|prisma|md|sh|ps1|py|go|cpp|cc|hpp|h|rs|cs|php|sql|ya?ml|toml)(?::[0-9]+(?:,[0-9]+)*)?`)
+		// Where one extension is a prefix of another the longer one comes
+		// first: alternation matches leftmost, so "js" ahead of "json" clips
+		// settings.json to settings.js, which then matches nothing in evidence.
+		`[A-Za-z0-9_@][A-Za-z0-9_@./+-]*\.(?:tsx|ts|jsx|json|js|mjs|cjs|prisma|md|sh|ps1|py|go|cpp|cc|hpp|h|rs|cs|php|sql|ya?ml|toml)(?::[0-9]+(?:,[0-9]+)*)?`)
 	reLineSuffix = regexp.MustCompile(`:[0-9]+(?:,[0-9]+)*$`)
 
 	// Output only a command execution can produce.

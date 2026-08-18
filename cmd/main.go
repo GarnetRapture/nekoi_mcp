@@ -22,6 +22,18 @@ func stateDir() string {
 	return filepath.Join(claudeDir(), "state", "censor")
 }
 
+// projectsDir holds one directory per working tree, each containing the JSONL
+// transcripts of that tree's sessions. It is what the watcher tails.
+func projectsDir() string {
+	return filepath.Join(claudeDir(), "projects")
+}
+
+// settingsPath is the file the editor reads hook registrations from, and the
+// one the server writes its own registration into on startup.
+func settingsPath() string {
+	return filepath.Join(claudeDir(), "settings.json")
+}
+
 func patternsPath() string {
 	if v := os.Getenv("CENSOR_PATTERNS"); v != "" {
 		return v

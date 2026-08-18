@@ -26,6 +26,12 @@ type State struct {
 	RepeatSig   string    `json:"repeat_sig"`   // signature of the previous call
 	RepeatCount int       `json:"repeat_count"` // identical consecutive calls
 
+	// AuditedEdits is the edit count the flow audit was last delivered at.
+	// The count only grows within a turn, and a notice on Stop keeps the turn
+	// from ending, so re-sending it at the same level would never let the turn
+	// close no matter how thoroughly the audit was answered.
+	AuditedEdits int `json:"audited_edits"`
+
 	// The watcher tails the transcript continuously and sees blocks the hook
 	// never reaches, because the hook only runs before a tool call and at turn
 	// end. Its tally is kept apart from ENCount/JACount so the two never add

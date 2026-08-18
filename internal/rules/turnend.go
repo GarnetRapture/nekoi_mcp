@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"nekoi_mcp/internal/session"
 )
 
 // A turn that ends without a tool call has to end on work. These patterns
@@ -65,10 +67,14 @@ func EvaluateSplitReport(text string) *Result {
 
 // EvaluateEditFlow fires once edits stop being local. Past a handful, each
 // change shifts assumptions the others rest on.
-func EvaluateEditFlow(edits int) *Result {
-	if edits <= 5 {
+// It is delivered once per edit count. The count only grows within a turn, and
+// a notice on Stop keeps the turn from ending, so repeating it at the same
+// level would hold the turn open however well the audit was answered.
+func EvaluateEditFlow(st *session.State, edits int) *Result {
+	if edits <= 5 || edits <= st.AuditedEdits {
 		return nil
 	}
+	st.AuditedEdits = edits
 	return &Result{Message: fmt.Sprintf(
 		"[EDIT_FLOW_AUDIT] %d file modifications this turn. Edits applied in sequence without re-reading the flow are individually correct and collectively broken.\nBefore the next one: does anything already edited depend on it, and did an earlier edit invalidate a caller or a type?",
 		edits)}

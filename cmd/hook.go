@@ -147,7 +147,7 @@ func runHook() int {
 		if r := rules.EvaluateSplitReport(turn.AssistantTxt); r != nil {
 			msgs = append(msgs, r.Message)
 		}
-		if r := rules.EvaluateEditFlow(turn.Edited); r != nil {
+		if r := rules.EvaluateEditFlow(st, turn.Edited); r != nil {
 			msgs = append(msgs, r.Message)
 		}
 		// The visible reply is scanned for the same banned patterns as the

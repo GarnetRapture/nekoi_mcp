@@ -1,0 +1,21 @@
+# Release binaries under /dist/ are committed on purpose, so that a user can
+# download and run one without a Go toolchain. Only the loose build at the
+# repository root — what `go build` drops when run by hand — is ignored.
+/nekoi_mcp
+/nekoi_mcp.exe
+
+# Generated Windows resource object: rebuilt by `make windows` from the .rc
+# and .ico, which are the tracked sources.
+/cmd/*.syso
+
+# Go
+*.test
+*.out
+/vendor/
+
+# Editors, OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

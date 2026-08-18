@@ -278,6 +278,6 @@ func Load(path string, maxLines int) (*Turn, error) {
 		}
 	}
 	t.AssistantTxt = strings.Join(txt, "\n")
-	t.Evidence = strings.ToLower(strings.ReplaceAll(strings.Join(evidence, "\n"), `\`, "/"))
+	t.Evidence = sig.NormalizePath(strings.Join(evidence, "\n"))
 	return t, nil
 }

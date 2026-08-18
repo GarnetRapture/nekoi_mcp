@@ -19,6 +19,17 @@ var (
 	reVersion = regexp.MustCompile(`([A-Za-z0-9_.-]+)\s+(?:--version|-V)(?:\s|$)`)
 )
 
+// NormalizePath reduces a path to one comparable spelling. Evidence is built
+// from the raw JSON of tool inputs, where a Windows path arrives escaped as
+// C:\\Users\\…; replacing single backslashes alone turns that into C://Users//
+// and it no longer matches the same path written plainly in a reply. The
+// doubled form is folded first for that reason.
+func NormalizePath(s string) string {
+	s = strings.ReplaceAll(s, `\\`, "/")
+	s = strings.ReplaceAll(s, `\`, "/")
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
 // Call returns a signature for one tool call: the name plus its input in a
 // canonical order, so an identical reissue hashes identically.
 func Call(name string, input json.RawMessage) string {

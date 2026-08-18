@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"nekoi_mcp/internal/sig"
 	"nekoi_mcp/internal/transcript"
 )
 
@@ -65,7 +66,7 @@ func unbacked(re *regexp.Regexp, text, evidence string, stripLines bool) []strin
 	seen := map[string]bool{}
 	var out []string
 	for _, m := range re.FindAllString(text, -1) {
-		norm := strings.ToLower(strings.ReplaceAll(m, `\`, "/"))
+		norm := sig.NormalizePath(m)
 		if seen[norm] {
 			continue
 		}

@@ -12,7 +12,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"nekoi_mcp/internal/sig"
 )
 
 // Events are the hook events this binary handles. MessageDisplay is the one
@@ -29,7 +30,7 @@ var matcherless = map[string]bool{"Stop": true, "MessageDisplay": true}
 // it, leaving every other setting and every existing hook entry untouched. It
 // reports whether the file was changed.
 func Ensure(settingsPath, exePath string) (bool, error) {
-	exe := normalize(exePath)
+	exe := sig.NormalizePath(exePath)
 	if exe == "" {
 		return false, nil
 	}
@@ -110,17 +111,10 @@ func runsExe(entries []json.RawMessage, exe string) bool {
 			continue
 		}
 		for _, h := range entry.Hooks {
-			if normalize(h.Command) == exe {
+			if sig.NormalizePath(h.Command) == exe {
 				return true
 			}
 		}
 	}
 	return false
-}
-
-// normalize makes two spellings of one path comparable: Windows accepts either
-// separator and ignores case, and an entry already on disk may have been
-// written by hand with the other one.
-func normalize(p string) string {
-	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(p), `\`, "/"))
 }

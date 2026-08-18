@@ -4,7 +4,7 @@
 
 # Nekoi_MCP
 
-**Judges Claude Code by its own transcript, and stops the attempt at the point of intent — not after the fact.**
+**Blocks a Claude Code tool call when the reasoning behind it breaks a rule.**
 
 **English** · [한국어](Home-ko)
 
@@ -12,11 +12,9 @@
 
 ---
 
-Nekoi_MCP is a guard that sits between Claude Code and the actions it is about
-to take. Its evidence is never an inference about the model: it is the session
-transcript the editor has already written to disk — the thinking blocks, the
-reply text, the tool inputs, and the billed token accounting that came back
-with each response.
+Nekoi_MCP reads the session transcript Claude Code writes to disk — thinking
+blocks, reply text, tool inputs, and the token accounting returned with each
+response — and decides whether the next action goes through.
 
 One binary runs in two modes, and both are reached from a single registration.
 
@@ -27,14 +25,13 @@ One binary runs in two modes, and both are reached from a single registration.
 
 ## Why the transcript
 
-A linter reads code. This reads the reasoning that produced the code, because
-the failures it targets are not syntactic — a change made while the reasoning
-still reads as guesswork, a file cited that was never opened, a completion
-claimed with no edit behind it. None of those are visible in the diff. All of
-them are visible in what the model wrote just before acting.
+The failures this targets are not syntactic, so a diff does not show them: a
+change made while the reasoning still reads as guesswork, a file cited that was
+never opened, a completion claimed with no edit behind it. What does show them
+is the text the model wrote immediately before acting.
 
-The transcript is also the only account that cannot be revised after the fact.
-By the time a hook runs, the block it judges is already on disk.
+That text is also already on disk by the time a hook runs, so it cannot be
+revised to match the outcome.
 
 ## Where interception happens
 
@@ -61,11 +58,10 @@ user prompt
         Stop hook ── exit 2 ─▶ the turn does not end
 ```
 
-The gap that matters is the first one. `PreToolUse` and `Stop` bracket tool
-calls and turn boundaries; reasoning that continues without calling anything
-reaches neither. `MessageDisplay` fires while the answer is still streaming,
-and the MCP server's watcher tails the JSONL on its own clock, so that stretch
-is not blind.
+`PreToolUse` and `Stop` bracket tool calls and turn boundaries, so reasoning
+that continues without calling anything reaches neither. `MessageDisplay` fires
+while the answer is still streaming, and the MCP server's watcher tails the
+JSONL on its own clock, which covers that stretch.
 
 ## Pages
 

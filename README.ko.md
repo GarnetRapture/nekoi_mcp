@@ -4,7 +4,7 @@
 
 # Nekoi_MCP
 
-**Claude Code를 그 자신의 기록으로 판정하고, 사후가 아니라 의도 단계에서 시도를 멈춥니다.**
+**사고가 규칙에 어긋나면 Claude Code의 도구 호출을 막습니다.**
 
 [![Go](https://img.shields.io/badge/Go-1.26-8B1A2B?style=flat-square&labelColor=1A1A1A)](https://go.dev)
 [![MCP](https://img.shields.io/badge/MCP-2026--07--28-8B1A2B?style=flat-square&labelColor=1A1A1A)](https://modelcontextprotocol.io)

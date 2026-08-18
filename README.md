@@ -4,7 +4,7 @@
 
 # Nekoi_MCP
 
-**Judges Claude Code by its own transcript, and stops the attempt at the point of intent — not after the fact.**
+**Blocks a Claude Code tool call when the reasoning behind it breaks a rule.**
 
 [![Go](https://img.shields.io/badge/Go-1.26-8B1A2B?style=flat-square&labelColor=1A1A1A)](https://go.dev)
 [![MCP](https://img.shields.io/badge/MCP-2026--07--28-8B1A2B?style=flat-square&labelColor=1A1A1A)](https://modelcontextprotocol.io)

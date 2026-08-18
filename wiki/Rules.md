@@ -90,15 +90,22 @@ Read from the call itself, so they fire before the command runs.
 
 | Trip | Condition |
 | --- | --- |
-| `TERMINAL_NOT_GIT_BASH` | PowerShell for anything but ADB |
-| `POWERSHELL_ADB_CHECK` | PowerShell for ADB — notice, not deny |
+| `TERMINAL_NOT_GIT_BASH` | Leaving Bash for PowerShell |
+| `POWERSHELL_DEVICE_STATE` | A command that reaches a connected device — notice, not deny |
 | `PYTHON3_COMMAND_FORBIDDEN` | `python3` where `python` is pinned |
 | `JSON_TOOL_NOT_JQ` | Python's `json` module where `jq` is pinned |
 | `PYTHON_FILE_IO` | Python writing files instead of Edit/Write |
 | `STRAY_TEMP_ARTIFACT` | Output redirected to a drive root |
 | `PARTIAL_DATA_JUDGMENT` | `head`/`tail`/`sed -n`/slicing truncating data a conclusion follows from |
 
-All deny except the ADB notice.
+All deny except the device-state notice.
+
+Bash is the framing because Claude Code runs its shell in a POSIX environment on
+Windows too, so every path, quote and pipe here is written against it and
+PowerShell's own conventions do not carry back. The exception is a command
+reaching a connected device, which is not a shell-dialect question — that state
+lives outside the repository and outside any diff, so it asks rather than
+blocks.
 
 Two more guard the Write tool specifically:
 

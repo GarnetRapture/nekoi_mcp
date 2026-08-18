@@ -86,15 +86,21 @@
 
 | 항목 | 조건 |
 | --- | --- |
-| `TERMINAL_NOT_GIT_BASH` | ADB가 아닌 일에 PowerShell |
-| `POWERSHELL_ADB_CHECK` | ADB용 PowerShell — 거부가 아니라 통지 |
+| `TERMINAL_NOT_GIT_BASH` | Bash를 벗어나 PowerShell로 감 |
+| `POWERSHELL_DEVICE_STATE` | 연결된 장치에 닿는 명령 — 거부가 아니라 통지 |
 | `PYTHON3_COMMAND_FORBIDDEN` | `python`으로 고정된 자리에 `python3` |
 | `JSON_TOOL_NOT_JQ` | `jq`로 고정된 자리에 Python `json` 모듈 |
 | `PYTHON_FILE_IO` | Edit/Write 대신 Python으로 파일 쓰기 |
 | `STRAY_TEMP_ARTIFACT` | 드라이브 최상위로 출력 리다이렉트 |
 | `PARTIAL_DATA_JUDGMENT` | `head`/`tail`/`sed -n`/슬라이싱으로 자른 데이터에서 결론 도출 |
 
-ADB 통지를 뺀 나머지는 전부 거부입니다.
+장치 상태 통지를 뺀 나머지는 전부 거부입니다.
+
+Bash가 기준인 이유는 Claude Code가 Windows에서도 셸을 POSIX 환경에서 돌리기
+때문입니다. 여기서 쓰는 경로와 따옴표와 파이프는 전부 그것을 기준으로 쓰이고,
+PowerShell의 관례는 그 환경으로 돌아오지 않습니다. 예외는 연결된 장치에 닿는
+명령인데, 이것은 셸 방언 문제가 아닙니다 — 그 상태는 저장소 밖, diff 밖에
+있으므로 막지 않고 묻습니다.
 
 Write 도구를 겨냥한 것이 둘 더 있습니다.
 

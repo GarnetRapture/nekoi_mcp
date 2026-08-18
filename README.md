@@ -46,10 +46,12 @@ after acting without saying what the last result settled.
 binary's presence or version already established in the session, and an
 investigation past 35 calls for one instruction.
 
-**Tool choice.** PowerShell for anything but ADB, `python3` where `python` is
-pinned, Python's `json` module where `jq` is pinned, Python file I/O in place of
-Edit, output written to a drive root, and `head`/`tail`/`sed -n`/slicing that
-truncates data a conclusion is then drawn from.
+**Tool choice.** Claude Code runs its shell in a POSIX environment on Windows
+too, so Bash is what every path, quote and pipe is written against; leaving it
+for PowerShell is denied. So is `python3` where `python` is pinned, Python's
+`json` module where `jq` is pinned, Python file I/O in place of Edit, output
+written to a drive root, and `head`/`tail`/`sed -n`/slicing that truncates data
+a conclusion is then drawn from.
 
 **Reporting.** File paths cited as evidence that nothing this turn opened,
 command output quoted when no command ran, a change reported as done with no

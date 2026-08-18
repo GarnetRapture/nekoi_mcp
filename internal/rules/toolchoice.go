@@ -28,9 +28,9 @@ func EvaluateToolChoice(toolName string, toolInput json.RawMessage) *Result {
 
 	if toolName == "PowerShell" {
 		if !reADB.MatchString(cmd) {
-			return &Result{Deny: true, Message: "[TERMINAL_NOT_GIT_BASH] PowerShell is reserved for ADB; every other shell task runs through Bash (git bash).\nReissue this through Bash, using POSIX equivalents."}
+			return &Result{Deny: true, Message: "[TERMINAL_NOT_GIT_BASH] Claude Code runs its shell in a POSIX environment on Windows too, so Bash is what every path, quote and pipe here is written against. PowerShell steps outside that environment and its conventions do not carry back.\nReissue this through Bash."}
 		}
-		return &Result{Message: "[POWERSHELL_ADB_CHECK] PowerShell for ADB touches device state outside this repo.\nProceed only if the user asked for it; otherwise cancel and do the requested work."}
+		return &Result{Message: "[POWERSHELL_DEVICE_STATE] This reaches a connected device, whose state lives outside the repository and outside any diff.\nProceed only if the user asked for it; otherwise cancel and do the requested work."}
 	}
 	if toolName != "Bash" || cmd == "" {
 		return nil

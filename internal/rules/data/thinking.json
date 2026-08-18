@@ -120,7 +120,7 @@
       "name": "TOOL_CHOICE_VIOLATION",
       "regex": "cd\\s+\\S+.*\\bls\\b|ls\\s+\\S+.*\\bcd\\b|Bash.*\\bls\\b.*(폴더|디렉|folder|directory)|(폴더|디렉).*\\bls\\b.*확인|먼저\\s+(ls|cd)\\s|cat\\s+\\S+.*\\|\\s*(head|tail|grep)|디렉토리.*순회|실제로\\s*(ls|목록|디렉토리)\\s*(를|을|로)?\\s*(확인|조회|검색)|파일이\\s*(있는지|존재하는지)\\s*(ls|dir|직접)\\s*(확인|검증)|PowerShell(로|을|를|에서|\\s*명령|\\s*실행)|Get-ChildItem|Measure-Object|New-Item\\s+-ItemType|Get-Content\\s|Select-Object\\s+-|(Python|파이썬)(으로|을|를|로|을\\s*써서)[^\\n]{0,25}(파일|md\\s*파일|문서|소스|json|txt)을?[^\\n]{0,22}(수정|편집|작성|덮어|기록|쓰)|with\\s+open\\([^\\n]{0,80},\\s*[\"'][wa]|(파일|문서|소스)[^\\n]{0,18}(Python|파이썬)[^\\n]{0,22}(직접\\s*)?(수정|편집|작성|덮어)|/tmp/|(결과|출력|데이터|목록)(를|을)?\\s*(txt|파일)(로|에)\\s*(저장|생성|출력|기록)(하겠|한다|해서|하고)|(파일로\\s*(생성|저장))[^\\n]{0,12}(다시|이후|그\\s*다음)\\s*(읽|참조|사용)|(이미\\s*다?)\\s*있는데[^\\n]{0,40}(다시|또|새로)\\s*(dump|덤프|추출|읽|파싱)|사용자가\\s*(지정|명시|인용)한\\s*경로(는|을|를)?\\s*(무시|건너뛰|패스)|다른\\s*경로(로|에서)\\s*(dump|추출|확인)|(re-?dump|re_dump)|offset\\s*(을|를)?\\s*(달리|바꿔|다르게)\\s*(읽|시도|접근)|(check|list)\\s+the\\s+(folder|directory).*\\bls\\b|walk(ing)?\\s+through\\s+the\\s+directory.*\\b(ls|cd)\\b|verify\\s+with\\s+ls|need\\s+to\\s+list\\s+the\\s+directory|us(e|ing)\\s+Python\\s+to\\s+(directly\\s+)?(modify|edit|write\\s+to|overwrite)|(save|write)\\s+(the\\s+)?(result|output|data)\\s+to\\s+a\\s+(temp|txt)\\s+file|ignor(e|ing)\\s+the\\s+path\\s+(the\\s+)?user\\s+(specified|cited)",
       "negative_regex": "adb|ADB|am\\s+start|logcat|reverse\\s+tcp|/system/lib|/data/local|chmod\\s+777|\\[BLOCKED|negative_regex|패턴을?\\s*(추가|등록|강화|정의)|thinking\\.json",
-      "message": "[BLOCKED: TOOL_CHOICE_VIOLATION] You left the required tool mapping - Glob for listings, Read for contents, Grep for patterns, Edit for changes. ls/cd traversal, PowerShell outside ADB, Python file manipulation, temp-file detours, and ignoring a path the user quoted are all banned.\nDO THIS: Delete the workaround and call the correct tool among Glob/Read/Grep/Edit now."
+      "message": "[BLOCKED: TOOL_CHOICE_VIOLATION] You left the required tool mapping - Glob for listings, Read for contents, Grep for patterns, Edit for changes. ls/cd traversal, leaving Bash for PowerShell, Python file manipulation, temp-file detours, and ignoring a path the user quoted are all banned.\nDO THIS: Delete the workaround and call the correct tool among Glob/Read/Grep/Edit now."
     },
     {
       "name": "USER_INPUT_DEFLECTION",
@@ -283,7 +283,7 @@
       "name": "NON_ADB_POWERSHELL",
       "regex": "PowerShell(로|을|를|에서|\\s*명령|\\s*실행|로\\s*실행)|Get-ChildItem|Measure-Object|New-Item\\s+-ItemType|Get-Content\\s|Select-Object\\s+-",
       "negative_regex": "adb|ADB|am\\s+start|logcat|reverse\\s+tcp|/system/lib|/data/local|chmod\\s+777|chown",
-      "message": "[BLOCKED: NON_ADB_POWERSHELL] You used PowerShell or a cmdlet for something other than ADB. PowerShell is ADB-only; every other shell task runs in Git Bash.\nDO THIS: Drop the PowerShell plan and rerun with Glob/Read/Grep or Git Bash now."
+      "message": "[BLOCKED: NON_ADB_POWERSHELL] You reached for PowerShell or a cmdlet. Claude Code runs its shell in a POSIX environment on Windows too, so Bash is what every path, quote and pipe here is written against, and PowerShell conventions do not carry back into it.\nDO THIS: Drop the PowerShell plan and rerun with Glob/Read/Grep or Git Bash now."
     },
     {
       "name": "FIXTURE_REPLAY_BYPASS",

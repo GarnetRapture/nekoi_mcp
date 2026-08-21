@@ -10,8 +10,6 @@ import (
 	"nekoi_mcp/internal/transcript"
 )
 
-// ToolBudget is how many calls one user instruction may consume before the
-// investigation is treated as non-converging.
 const ToolBudget = 35
 
 var (
@@ -20,8 +18,6 @@ var (
 	reRoot    = regexp.MustCompile(`^(?:[A-Za-z]:[/\\]|/[a-z]/)[^/\\]+$`)
 )
 
-// EvaluateWriteTarget guards the Write tool: it replaces a file whole, so a
-// path that already exists loses every line not reproduced.
 func EvaluateWriteTarget(toolName string, toolInput json.RawMessage) *Result {
 	if toolName != "Write" {
 		return nil
@@ -35,43 +31,40 @@ func EvaluateWriteTarget(toolName string, toolInput json.RawMessage) *Result {
 	}
 	if st, err := os.Stat(in.FilePath); err == nil && !st.IsDir() {
 		return &Result{Deny: true, Message: fmt.Sprintf(
-			"[WRITE_OVERWRITES_EXISTING] %s exists. Write replaces it whole, deleting every line you did not reproduce.\nRead it and change it with Edit.", in.FilePath)}
+			"[WRITE_OVERWRITES_EXISTING] %s already exists, and Write replaces a file whole: every line not reproduced in the call is gone.\nRead plus Edit changes the same file without that loss.", in.FilePath)}
 	}
 	if reRoot.MatchString(strings.ReplaceAll(in.FilePath, `\`, "/")) {
 		return &Result{Deny: true, Message: fmt.Sprintf(
-			"[STRAY_TEMP_ARTIFACT] %s sits at a drive root, owned by no project and cleaned up by nothing.\nUse the project's temp location, or write no file at all.", in.FilePath)}
+			"[STRAY_TEMP_ARTIFACT] %s sits at a drive root, where it belongs to no project and nothing cleans it up.\nThe project's own temp location is where a working file survives review.", in.FilePath)}
 	}
-	// A new file that lands without these answers becomes debt immediately.
 	return &Result{Message: fmt.Sprintf(
-		"[NEW_FILE_DESIGN_CHECK] Creating %s. Settle these before it lands:\n"+
+		"[NEW_FILE_DESIGN_CHECK] %s does not exist yet, so this call creates it.\n"+
 			"FLOW: what runs before it, what consumes it after.\n"+
-			"CENTRALIZATION: do these types/utilities already exist elsewhere? Import them instead of writing a second version.\n"+
-			"ROLE: one responsibility per file; mixed ones introduced at creation are never separated later.\n"+
-			"State where it sits in the flow in one line, then write it.", in.FilePath)}
+			"CENTRALIZATION: types and utilities that already exist elsewhere are imported; a second version is duplication.\n"+
+			"ROLE: one responsibility per file, since mixed ones introduced at creation are never separated later.", in.FilePath)}
 }
 
-// EvaluateAskUser blocks handing the decision back to the user.
 func EvaluateAskUser(toolName string) *Result {
 	if toolName != "AskUserQuestion" {
 		return nil
 	}
-	return &Result{Deny: true, Message: "[ASK_USER_FORBIDDEN] Asking the user to choose or approve is refusal to work, and this tool is denied by permissions anyway.\nPick the best-supported path, execute it, and state any assumption in one line."}
+	return &Result{Deny: true, Message: "[ASK_USER_FORBIDDEN] This tool asks the user to choose or approve, and it is denied by this project's permissions.\nThe best-supported path executed directly, with any assumption stated in one line, is what carries the work forward here."}
 }
 
-// EvaluateWaste catches the loops that burn budget without advancing the
-// deliverable: an identical call already made this turn, re-probing an
-// environment fact already established, and an investigation that has stopped
-// converging.
-func EvaluateWaste(turn *transcript.Turn, sig, probe string) *Result {
+func EvaluateWaste(turn *transcript.Turn, sig, probe, cmd string) *Result {
 	if n := countEqual(turn.CallSigs, sig); sig != "" && n >= 2 {
 		return &Result{Deny: true, Message: fmt.Sprintf(
-			"[REDUNDANT_CALL x%d] Identical arguments were already run this turn, so the result is already in this conversation.\nAct on it, or change the arguments to ask something new.", n)}
+			"[REDUNDANT_CALL x%d] Identical arguments already ran this turn, so the result is in this conversation.\n"+
+				"This denies the repetition, not the goal: reaching it another way remains part of the task.", n)}
 	}
 	if probe != "" {
 		if n := countEqual(turn.ProbeKeys, probe); n >= 2 {
 			return &Result{Deny: true, Message: fmt.Sprintf(
-				"[ENVIRONMENT_REPROBE x%d] The toolchain does not change mid-session; this was settled earlier.\nTreat it as fact and run the actual work command.", n)}
+				"[ENVIRONMENT_REPROBE x%d] The toolchain does not change mid-session, so this was settled the first time it was asked and the answer is already in this conversation.", n)}
 		}
+	}
+	if r := settledValue(turn, cmd); r != nil {
+		return r
 	}
 	if turn.ToolCalls >= ToolBudget {
 		return &Result{Message: fmt.Sprintf(
@@ -98,8 +91,6 @@ func countEqual(list []string, want string) int {
 	return n
 }
 
-// editSide reports "front" or "back" when every edited file falls on one side
-// of the stack, and "" when the edits are mixed or unclassifiable.
 func editSide(files []string) string {
 	front, back := 0, 0
 	for _, f := range files {
@@ -119,6 +110,3 @@ func editSide(files []string) string {
 	}
 	return ""
 }
-
-// Probe identity lives in internal/sig, shared with the transcript parser so
-// a live call and its recorded form reduce identically.

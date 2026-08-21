@@ -1,6 +1,3 @@
-// Package sig derives stable identities for tool calls. Both the live hook
-// input and the recorded transcript are reduced through the same functions,
-// so a call and its record produce the same string.
 package sig
 
 import (
@@ -14,24 +11,28 @@ import (
 	"strings"
 )
 
+const digestChars = 32
+
 var (
 	reWhich   = regexp.MustCompile(`(?:^|[;&|]\s*)(?:which|command\s+-v|type\s+-p)\s+([A-Za-z0-9_.-]+)`)
 	reVersion = regexp.MustCompile(`([A-Za-z0-9_.-]+)\s+(?:--version|-V)(?:\s|$)`)
 )
 
-// NormalizePath reduces a path to one comparable spelling. Evidence is built
-// from the raw JSON of tool inputs, where a Windows path arrives escaped as
-// C:\\Users\\…; replacing single backslashes alone turns that into C://Users//
-// and it no longer matches the same path written plainly in a reply. The
-// doubled form is folded first for that reason.
 func NormalizePath(s string) string {
 	s = strings.ReplaceAll(s, `\\`, "/")
 	s = strings.ReplaceAll(s, `\`, "/")
-	return strings.ToLower(strings.TrimSpace(s))
+	s = strings.ToLower(strings.TrimSpace(s))
+	for strings.Contains(s, "//") {
+		s = strings.ReplaceAll(s, "//", "/")
+	}
+	return s
 }
 
-// Call returns a signature for one tool call: the name plus its input in a
-// canonical order, so an identical reissue hashes identically.
+func Text(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])[:digestChars]
+}
+
 func Call(name string, input json.RawMessage) string {
 	if name == "" {
 		return ""
@@ -43,7 +44,7 @@ func Call(name string, input json.RawMessage) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s|", name)
 	writeCanonical(h, parsed)
-	return hex.EncodeToString(h.Sum(nil))[:32]
+	return hex.EncodeToString(h.Sum(nil))[:digestChars]
 }
 
 func writeCanonical(w io.Writer, v any) {
@@ -71,9 +72,17 @@ func writeCanonical(w io.Writer, v any) {
 	}
 }
 
-// Probe identifies a command that only asks whether a binary exists or what
-// version it is. Those facts cannot change within a session, so asking twice
-// yields nothing.
+func Command(name string, input json.RawMessage) string {
+	if name != "Bash" && name != "PowerShell" {
+		return ""
+	}
+	var in struct {
+		Command string `json:"command"`
+	}
+	_ = json.Unmarshal(input, &in)
+	return in.Command
+}
+
 func Probe(name string, input json.RawMessage) string {
 	if name != "Bash" && name != "PowerShell" {
 		return ""

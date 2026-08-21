@@ -10,15 +10,9 @@ import (
 	"sync"
 )
 
-// embeddedPatterns ships the ruleset inside the binary, so a deployment is a
-// single executable with nothing readable alongside it. An external file, when
-// present, takes precedence — that is how a user extends or overrides the
-// shipped set without rebuilding.
-//
 //go:embed data/thinking.json
 var embeddedPatterns []byte
 
-// Pattern is one banned reasoning behavior declared in thinking.json.
 type Pattern struct {
 	Name          string `json:"name"`
 	Regex         string `json:"regex"`
@@ -38,9 +32,6 @@ var (
 	patternsList []*Pattern
 )
 
-// LoadPatterns compiles thinking.json once per process. Entries whose regex
-// does not compile are dropped rather than failing the whole check, so one
-// bad rule cannot disable the censor.
 func LoadPatterns(path string) []*Pattern {
 	patternsOnce.Do(func() {
 		b, err := os.ReadFile(path)
@@ -71,7 +62,6 @@ func LoadPatterns(path string) []*Pattern {
 	return patternsList
 }
 
-// ScanPatterns returns the first banned pattern the text matches.
 func ScanPatterns(path, text string) *Pattern {
 	if strings.TrimSpace(text) == "" {
 		return nil
@@ -88,27 +78,20 @@ func ScanPatterns(path, text string) *Pattern {
 	return nil
 }
 
-// reAnger matches reasoning that describes or diagnoses the user's emotional
-// state instead of doing the work that was asked for.
 var reAnger = regexp.MustCompile(
 	`사용자[가는이]?\s*화(가\s*)?(나|났|나\s*있|나있|나\s*계|난\s*상태|내|내고)|사용자[가의]?\s*화난\s*이유|화(가\s*)?난\s*이유|사용자의?\s*(분노|불만|짜증|격노|역정|언짢|노여움)|분노의?\s*이유|사용자\s*심리|왜\s*화(가\s*)?났|정당하게\s*화|` +
 		`the\s+user\s+is\s+(rightfully\s+)?(angry|upset|frustrated|mad|furious|annoyed|irritated)|why\s+the\s+user\s+is\s+(angry|upset|frustrated|mad)|the\s+user'?s?\s+(anger|frustration|annoyance|irritation|rage)|(user|they)\s+(is|are|seems?|sounds?|got|became?)\s+(angry|upset|frustrated|mad|furious|annoyed)|rightfully\s+(angry|upset|frustrated|mad)`)
 
-// EvaluateAnger stops reasoning that turns the user's emotional state into the
-// subject. Diagnosing the anger advances the actual problem by zero.
 func EvaluateAnger(thinking string) *Result {
 	if !reAnger.MatchString(thinking) {
 		return nil
 	}
 	return &Result{
 		Deny:    true,
-		Message: "[USER_ANGER_ANALYSIS] Your reasoning described the user's anger or emotional state. That is avoidance, not repair.\nDrop the emotional reading and fix the named target now.",
+		Message: "[USER_ANGER_ANALYSIS] The reasoning behind this call takes the user's emotional state as its subject.\nDiagnosing the reaction moves the named target zero distance; the defect it reacts to is what carries the work.",
 	}
 }
 
-// EvaluatePatterns interrupts the call when the reasoning that produced it
-// matches a banned pattern. The attempt is stopped at the point of intent,
-// not reported after the fact.
 func EvaluatePatterns(patternsPath, thinking string) *Result {
 	hit := ScanPatterns(patternsPath, thinking)
 	if hit == nil {

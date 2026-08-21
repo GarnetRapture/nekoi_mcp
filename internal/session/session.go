@@ -8,54 +8,76 @@ import (
 	"time"
 )
 
-// State is the per-session record the censor keeps between hook invocations.
-// One file per session; every hook run reads it, mutates it, writes it back.
+const JudgedKeep = 512
+
 type State struct {
 	SessionID   string    `json:"session_id"`
 	Model       string    `json:"model"`
 	CWD         string    `json:"cwd"`
 	StartedAt   time.Time `json:"started_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-	ENCount     int       `json:"en_count"`   // English thinking blocks flagged
-	JACount     int       `json:"ja_count"`   // Japanese thinking blocks flagged
-	DenyCount   int       `json:"deny_count"` // tool calls actually denied
-	ToolCalls   int       `json:"tool_calls"` // tool calls seen
-	Cursor      int       `json:"cursor"`     // thinking blocks already judged
-	Streak      int       `json:"streak"`     // consecutive EN verdicts
+	ENCount     int       `json:"en_count"`
+	JACount     int       `json:"ja_count"`
+	DenyCount   int       `json:"deny_count"`
+	ToolCalls   int       `json:"tool_calls"`
+	Streak      int       `json:"streak"`
 	LastVerdict string    `json:"last_verdict"`
-	RepeatSig   string    `json:"repeat_sig"`   // signature of the previous call
-	RepeatCount int       `json:"repeat_count"` // identical consecutive calls
+	RepeatSig   string    `json:"repeat_sig"`
+	RepeatCount int       `json:"repeat_count"`
 
-	// AuditedEdits is the edit count the flow audit was last delivered at.
-	// The count only grows within a turn, and a notice on Stop keeps the turn
-	// from ending, so re-sending it at the same level would never let the turn
-	// close no matter how thoroughly the audit was answered.
 	AuditedEdits int `json:"audited_edits"`
 
-	// The watcher tails the transcript continuously and sees blocks the hook
-	// never reaches, because the hook only runs before a tool call and at turn
-	// end. Its tally is kept apart from ENCount/JACount so the two never add
-	// the same block twice; WatchSeen is how far it has read.
+	JudgedThoughts []string `json:"judged_thoughts"`
+	ReportedTexts  []string `json:"reported_texts"`
+
 	WatchEN   int `json:"watch_en"`
 	WatchJA   int `json:"watch_ja"`
 	WatchSeen int `json:"watch_seen"`
 
-	// WatchBlock is raised the moment the watcher reads a violating block and
-	// is cleared by the first hook that acts on it. It carries the verdict and
-	// the offending sentence so the denial quotes what was actually written
-	// rather than asserting a violation the model cannot see.
-	WatchBlock   bool   `json:"watch_block"`
-	WatchVerdict string `json:"watch_verdict"`
-	WatchQuote   string `json:"watch_quote"`
+	PendingBlock  bool   `json:"pending_block"`
+	PendingReason string `json:"pending_reason"`
 
-	// Billed API traffic, read from the usage accounting Claude Code stores
-	// for each assistant message. ContextTokens is the prompt size the last
-	// request was charged for, which is what an injected notice adds to on
-	// every subsequent request.
 	ContextTokens int64 `json:"context_tokens"`
 	OutputTokens  int64 `json:"output_tokens"`
 	InjectedChars int64 `json:"injected_chars"`
 	Notices       int   `json:"notices"`
+}
+
+func (s *State) Judged(sig string) bool {
+	return contains(s.JudgedThoughts, sig)
+}
+
+func (s *State) MarkJudged(sig string) bool {
+	if sig == "" || contains(s.JudgedThoughts, sig) {
+		return false
+	}
+	s.JudgedThoughts = push(s.JudgedThoughts, sig)
+	return true
+}
+
+func (s *State) MarkReported(sig string) bool {
+	if sig == "" || contains(s.ReportedTexts, sig) {
+		return false
+	}
+	s.ReportedTexts = push(s.ReportedTexts, sig)
+	return true
+}
+
+func contains(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+func push(list []string, sig string) []string {
+	list = append(list, sig)
+	if len(list) > JudgedKeep {
+		list = append([]string(nil), list[len(list)-JudgedKeep:]...)
+	}
+	return list
 }
 
 type Store struct {
@@ -118,7 +140,6 @@ func (s *Store) Save(st *State) error {
 	return os.Rename(tmp, s.path(st.SessionID))
 }
 
-// List returns every session record currently on disk, newest first.
 func (s *Store) List() []*State {
 	s.mu.Lock()
 	defer s.mu.Unlock()

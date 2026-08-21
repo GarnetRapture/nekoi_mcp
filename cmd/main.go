@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 )
 
-// claudeDir resolves the global Claude configuration directory. CLAUDE_DIR
-// overrides it so the binary can be exercised against a scratch tree.
 func claudeDir() string {
 	if v := os.Getenv("CLAUDE_DIR"); v != "" {
 		return v
@@ -22,14 +20,14 @@ func stateDir() string {
 	return filepath.Join(claudeDir(), "state", "censor")
 }
 
-// projectsDir holds one directory per working tree, each containing the JSONL
-// transcripts of that tree's sessions. It is what the watcher tails.
+func offsetDir() string {
+	return filepath.Join(claudeDir(), "state", "censor-offsets")
+}
+
 func projectsDir() string {
 	return filepath.Join(claudeDir(), "projects")
 }
 
-// settingsPath is the file the editor reads hook registrations from, and the
-// one the server writes its own registration into on startup.
 func settingsPath() string {
 	return filepath.Join(claudeDir(), "settings.json")
 }

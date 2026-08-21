@@ -5,35 +5,33 @@ import (
 	"regexp"
 	"strings"
 
+	"nekoi_mcp/internal/session"
 	"nekoi_mcp/internal/sig"
 	"nekoi_mcp/internal/transcript"
 )
 
 var (
-	// A path-looking token with a source extension, optionally followed by
-	// line numbers. Citing one reads as first-hand observation.
 	reFileRef = regexp.MustCompile(
-		// Where one extension is a prefix of another the longer one comes
-		// first: alternation matches leftmost, so "js" ahead of "json" clips
-		// settings.json to settings.js, which then matches nothing in evidence.
 		`[A-Za-z0-9_@][A-Za-z0-9_@./+-]*\.(?:tsx|ts|jsx|json|js|mjs|cjs|prisma|md|sh|ps1|py|go|cpp|cc|hpp|h|rs|cs|php|sql|ya?ml|toml)(?::[0-9]+(?:,[0-9]+)*)?`)
 	reLineSuffix = regexp.MustCompile(`:[0-9]+(?:,[0-9]+)*$`)
 
-	// Output only a command execution can produce.
 	reToolOutput = regexp.MustCompile(
 		`P[0-9]{4}:|error TS[0-9]{4}|TS[0-9]{4}:|exit code [0-9]+|Database schema is up to date|[0-9]+ migrations? found|Compiled successfully|Cannot find module [^\s]+|panic: |go: cannot`)
 
-	// Korean and English phrasings that state a change as already made.
 	reEditClaim = regexp.MustCompile(
 		`추가했|교체했|수정했|생성했|삭제했|제거했|반영했|적용했|중앙화했|바꿨|고쳤|만들었|작성했|갱신했|해소(했|됐)|수정\s*완료|구현\s*완료|처리\s*완료|(으로|로)\s*교체|(replaced|added|created|updated|fixed|removed)\s+(the\s+)?[A-Za-z0-9_@./-]+\.(ts|tsx|js|json|prisma|md|sh|py|go)`)
 )
 
 const maxCited = 8
 
-// EvaluateReporting checks the visible reply against what the turn actually
-// observed. It runs on Stop, where the reply is complete.
-func EvaluateReporting(turn *transcript.Turn) []*Result {
-	text := strings.TrimSpace(turn.AssistantTxt)
+func EvaluateReporting(st *session.State, turn *transcript.Turn) []*Result {
+	var fresh []string
+	for _, b := range turn.AssistantBlocks {
+		if st.MarkReported(b.Sig) {
+			fresh = append(fresh, b.Text)
+		}
+	}
+	text := strings.TrimSpace(strings.Join(fresh, "\n"))
 	if text == "" {
 		return nil
 	}
@@ -41,27 +39,24 @@ func EvaluateReporting(turn *transcript.Turn) []*Result {
 
 	if cited := unbacked(reFileRef, text, turn.Evidence, true); len(cited) > 0 {
 		out = append(out, &Result{Message: fmt.Sprintf(
-			"[UNVERIFIED_FILE_REFERENCE] Cited as evidence, but nothing this turn opened them and the user did not supply them:\n%s\nDescribe only files you actually read.",
+			"[UNVERIFIED_FILE_REFERENCE] These paths are cited as evidence, and nothing in this turn opened them nor did the user supply them:\n%s\nA path named without having been read carries the weight of an observation that never happened.",
 			strings.Join(cited, ", "))})
 	}
 
 	if turn.Bashed == 0 {
 		if cited := unbacked(reToolOutput, text, turn.Evidence, false); len(cited) > 0 {
 			out = append(out, &Result{Message: fmt.Sprintf(
-				"[FABRICATED_TOOL_OUTPUT] You quoted output only a command can produce, but no command ran this turn:\n%s\nRun it or drop the quote.",
+				"[FABRICATED_TOOL_OUTPUT] This reply quotes output only a command execution produces, and no command ran in this turn:\n%s",
 				strings.Join(cited, ", "))})
 		}
 	}
 
 	if turn.Edited == 0 && reEditClaim.MatchString(text) {
-		out = append(out, &Result{Message: "[UNBACKED_EDIT_CLAIM] You reported a change as done with zero Edit/Write calls this turn.\nMake the change now, or delete the claim."})
+		out = append(out, &Result{Message: "[UNBACKED_EDIT_CLAIM] This reply states a change as already made, and the turn holds zero Edit/Write calls.\nThe file on disk is unchanged, so the claim and the repository disagree."})
 	}
 	return out
 }
 
-// unbacked returns the matches of re in text that do not appear in evidence.
-// When stripLines is set, a trailing :line,col is ignored when matching, so
-// citing a real file at a new line still counts as backed.
 func unbacked(re *regexp.Regexp, text, evidence string, stripLines bool) []string {
 	seen := map[string]bool{}
 	var out []string

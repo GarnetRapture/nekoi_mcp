@@ -1,11 +1,3 @@
-// Package selfreg registers this binary as a hook from inside the running MCP
-// server, so that one `claude mcp add` is the whole installation.
-//
-// The two modes are separate registrations: `mcp` on the command line reaches
-// the server, no argument reaches the hook. Registering only the server yields
-// the MCP tools and none of the enforcement, because the editor never runs the
-// binary as a hook. Rather than depend on a second manual step, the server
-// writes that registration itself on startup.
 package selfreg
 
 import (

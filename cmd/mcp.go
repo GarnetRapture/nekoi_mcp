@@ -79,6 +79,13 @@ func toolCatalog() []toolDef {
 			}, nil),
 		},
 		{
+			Name:        "censor_live",
+			Description: "Report thinking blocks the watcher flagged as they were written, newest last. Covers reasoning that never reached a tool call and so was never seen by a hook.",
+			InputSchema: objectSchema(map[string]any{
+				"limit": map[string]any{"type": "integer", "description": "Maximum rows (default 10)."},
+			}, nil),
+		},
+		{
 			Name:        "censor_check_text",
 			Description: "Classify text as Korean or English reasoning using the same rule the hook enforces, and report which banned thinking.json patterns it matches.",
 			InputSchema: objectSchema(map[string]any{
@@ -88,51 +95,42 @@ func toolCatalog() []toolDef {
 	}
 }
 
-// clientNotifier writes to the same stdio connection the response loop uses.
-// The watcher runs on its own goroutine, so every write goes through one mutex
-// — two writers interleaving on stdout would produce JSON neither side can
-// parse.
-type clientNotifier struct {
-	mu  sync.Mutex
-	out *bufio.Writer
+type stdioNotifier struct {
+	mu sync.Mutex
+	w  *bufio.Writer
 }
 
-// send writes one already-marshalled message. Both the response loop and the
-// watcher go through here, so the two never interleave on stdout.
-func (n *clientNotifier) send(b []byte) {
+func (n *stdioNotifier) write(v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	n.out.Write(b)
-	n.out.WriteByte('\n')
-	n.out.Flush()
+	if _, err := n.w.Write(b); err != nil {
+		return err
+	}
+	if err := n.w.WriteByte('\n'); err != nil {
+		return err
+	}
+	return n.w.Flush()
 }
 
-// Notify pushes the verdict out the moment the watcher reads it. A server may
-// send a notification whenever it likes, which is what makes this independent
-// of any hook: no tool call has to happen first.
-func (n *clientNotifier) Notify(verdict, excerpt string) {
-	msg := map[string]any{
+func (n *stdioNotifier) Notify(method string, params any) error {
+	return n.write(map[string]any{
 		"jsonrpc": "2.0",
-		"method":  "notifications/message",
-		"params": map[string]any{
-			"level":  "error",
-			"logger": AppName,
-			"data": fmt.Sprintf(
-				"[WATCH_%s] The transcript watcher read this thinking block as it was written:\n> %s\nThat is the thinking channel, not the reply — writing the reply in Korean leaves it standing.",
-				verdict, excerpt),
-		},
-	}
-	b, err := json.Marshal(msg)
-	if err != nil {
-		return
-	}
-	n.send(b)
+		"method":  method,
+		"params":  params,
+	})
+}
+
+func (n *stdioNotifier) flush() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	_ = n.w.Flush()
 }
 
 func runMCP() int {
-	// One `claude mcp add` has to be the whole installation, so the server
-	// puts its own hook registration in place here. A failure is not fatal:
-	// the MCP tools still work, and the next startup tries again.
 	if exe, err := os.Executable(); err == nil {
 		_, _ = selfreg.Ensure(settingsPath(), filepath.ToSlash(exe))
 	}
@@ -141,15 +139,11 @@ func runMCP() int {
 
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 1<<20), 32<<20)
-	out := bufio.NewWriter(os.Stdout)
-	defer out.Flush()
+	conn := &stdioNotifier{w: bufio.NewWriter(os.Stdout)}
+	defer conn.flush()
 
-	// This process outlives every hook invocation, so it is the only place a
-	// continuous watch can run: the hook fires before a tool call and at turn
-	// end, and reasoning produced between those points reaches neither. The
-	// notifier hands it the same connection this loop replies on.
-	notifier := &clientNotifier{out: out}
-	w := watch.New(projectsDir(), store, notifier)
+	w := watch.New(projectsDir(), offsetDir(), store)
+	w.SetNotifier(conn)
 	w.Start()
 	defer w.Stop()
 
@@ -163,14 +157,10 @@ func runMCP() int {
 			continue
 		}
 		resp := dispatch(store, w, req)
-		if resp == nil { // notification: no reply
+		if resp == nil {
 			continue
 		}
-		b, err := json.Marshal(resp)
-		if err != nil {
-			continue
-		}
-		notifier.send(b)
+		_ = conn.write(resp)
 	}
 	return 0
 }
@@ -230,13 +220,11 @@ func callTool(store *session.Store, w *watch.Watcher, params json.RawMessage) ca
 	}
 	_ = json.Unmarshal(params, &p)
 
-	// Enforced here, not deferred to a hook: the watcher read this block from
-	// the transcript while the reasoning was still running, and this process is
-	// the one being asked to act on it.
 	if w != nil {
 		if v := w.TakePending(); v != nil {
 			return textResult(fmt.Sprintf(
-				"[WATCH_%s] The watcher read this block as it was written, before any hook ran.\n> %s\nThis call is refused on that block alone. Discard it, think the same problem through again in Korean at the same depth, then call.",
+				"[WATCH_%s] The watcher read this thinking block from the transcript as it was written, before any hook ran.\n> %s\n"+
+					"The rule for this project is that reasoning is written in Korean, and this call is refused on that block alone.",
 				v.Verdict, v.Excerpt), true)
 		}
 	}
@@ -246,6 +234,8 @@ func callTool(store *session.Store, w *watch.Watcher, params json.RawMessage) ca
 		return textResult(statusReport(store, p.Arguments.SessionID), false)
 	case "censor_sessions":
 		return textResult(sessionsReport(store, p.Arguments.Limit), false)
+	case "censor_live":
+		return textResult(liveReport(w, p.Arguments.Limit), false)
 	case "censor_check_text":
 		return textResult(checkReport(p.Arguments.Text), false)
 	default:
@@ -296,6 +286,32 @@ func sessionsReport(store *session.Store, limit int) string {
 			st.UpdatedAt.Format("01-02 15:04"))
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+func liveReport(w *watch.Watcher, limit int) string {
+	if w == nil {
+		return "watcher not running"
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	rows := w.Recent(limit)
+	if len(rows) == 0 {
+		return "no flagged thinking blocks"
+	}
+	var b strings.Builder
+	for _, v := range rows {
+		fmt.Fprintf(&b, "%s %s %s\n> %s\n",
+			v.At.Format("15:04:05"), v.Verdict, shortID(v.SessionID), v.Excerpt)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func shortID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
 }
 
 func checkReport(text string) string {
